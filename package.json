@@ -1,0 +1,21 @@
+{
+  "name": "shoe-gallery",
+  "version": "1.0.0",
+  "description": "It's just an attempt to help my girlfriend organize her shoe collection and in this way give her better information about her stock to help her make a decision about her next purchases. She has a lot of shoes, but she doesn't have space XD",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "mysql": "^2.18.1",
+    "mysql2": "^3.12.0"
+  }
+}
