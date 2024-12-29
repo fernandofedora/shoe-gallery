@@ -3,6 +3,7 @@ const mysql = require('mysql2');
 const multer = require('multer');
 const path = require('path');
 const bodyParser = require('body-parser');
+const sharp = require('sharp'); // Importamos sharp
 require('dotenv').config();
 
 const app = express();
@@ -31,13 +32,20 @@ app.use(express.static('public'));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Configuración de multer para subir imágenes
-const storage = multer.diskStorage({
-    destination: './public/uploads/',
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}_${file.originalname}`);
-    },
-});
+const storage = multer.memoryStorage(); // Usamos memoria para procesar la imagen antes de guardarla
 const upload = multer({ storage });
+
+// Función para optimizar y guardar la imagen
+async function optimizarImagen(buffer, filename) {
+    const outputPath = path.join(__dirname, 'public/uploads/', filename);
+    
+    await sharp(buffer)
+        .resize(800) // Redimensionar a un ancho máximo de 800px
+        .toFormat('jpeg', { quality: 85 }) // Convertir a JPEG con calidad 85
+        .toFile(outputPath); // Guardar en el sistema
+
+    return `/uploads/${filename}`;
+}
 
 // Ruta: Página principal
 app.get('/', (req, res) => {
@@ -53,13 +61,19 @@ app.get('/add', (req, res) => {
 });
 
 // Ruta: Crear nueva imagen
-app.post('/add', upload.single('image'), (req, res) => {
+app.post('/add', upload.single('image'), async (req, res) => {
     const { title, brand } = req.body;
-    const image_path = `/uploads/${req.file.filename}`;
-    db.query('INSERT INTO images (title, brand, image_path) VALUES (?, ?, ?)', [title, brand, image_path], (err) => {
-        if (err) throw err;
-        res.redirect('/');
-    });
+    
+    try {
+        const image_path = await optimizarImagen(req.file.buffer, `${Date.now()}_${req.file.originalname}`);
+        db.query('INSERT INTO images (title, brand, image_path) VALUES (?, ?, ?)', [title, brand, image_path], (err) => {
+            if (err) throw err;
+            res.redirect('/');
+        });
+    } catch (error) {
+        console.error('Error al optimizar la imagen:', error);
+        res.status(500).send('Error al subir la imagen.');
+    }
 });
 
 // Ruta: Formulario para editar
@@ -72,26 +86,32 @@ app.get('/edit/:id', (req, res) => {
 });
 
 // Ruta: Actualizar imagen
-app.post('/edit/:id', upload.single('image'), (req, res) => {
+app.post('/edit/:id', upload.single('image'), async (req, res) => {
     const { id } = req.params;
     const { title, brand } = req.body;
+    
     let updateQuery = 'UPDATE images SET title = ?, brand = ?';
     const params = [title, brand];
 
-    // Si se sube una nueva imagen
-    if (req.file) {
-        const image_path = `/uploads/${req.file.filename}`;
-        updateQuery += ', image_path = ?';
-        params.push(image_path);
+    try {
+        // Si se sube una nueva imagen
+        if (req.file) {
+            const image_path = await optimizarImagen(req.file.buffer, `${Date.now()}_${req.file.originalname}`);
+            updateQuery += ', image_path = ?';
+            params.push(image_path);
+        }
+
+        updateQuery += ' WHERE id = ?';
+        params.push(id);
+
+        db.query(updateQuery, params, (err) => {
+            if (err) throw err;
+            res.redirect('/');
+        });
+    } catch (error) {
+        console.error('Error al optimizar la imagen:', error);
+        res.status(500).send('Error al actualizar la imagen.');
     }
-
-    updateQuery += ' WHERE id = ?';
-    params.push(id);
-
-    db.query(updateQuery, params, (err) => {
-        if (err) throw err;
-        res.redirect('/');
-    });
 });
 
 // Ruta: Eliminar imagen
