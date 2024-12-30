@@ -1,17 +1,32 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shoe Gallery</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body>
 <div class="container mt-5">
     <h1>Shoe Gallery</h1>
+    
+    <!-- Formulario para filtrar por marca -->
+    <form action="/" method="GET" class="mb-4">
+        <div class="input-group">
+            <input type="text" name="brand" class="form-control" placeholder="Buscar por marca" required>
+            <button class="btn btn-outline-secondary" type="submit">Filtrar</button>
+        </div>
+    </form>
+
+    <!-- Botón para limpiar el filtro -->
+    <a href="/" class="btn btn-secondary mb-3">Limpiar Filtro</a>
+
     <a href="/add" class="btn btn-primary mb-3">Agregar Imagen</a>
+    
     <div class="row">
         <% images.forEach(image => { %>
         <div class="col-md-4">
-            <div class="card mb-4">
+            <div class="card mb-4 shadow-sm">
                 <img src="<%= image.image_path %>" class="card-img-top" alt="<%= image.title %>">
                 <div class="card-body">
                     <h5 class="card-title"><%= image.title %></h5>
@@ -24,7 +39,16 @@
             </div>
         </div>
         <% }); %>
+
+        <% if (images.length === 0) { %>
+            <div class="col-12">
+                <p>No se encontraron imágenes para esta marca.</p>
+            </div>
+        <% } %>
+
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
