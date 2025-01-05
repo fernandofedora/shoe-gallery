@@ -4,26 +4,36 @@ const multer = require('multer');
 const path = require('path');
 const bodyParser = require('body-parser');
 const sharp = require('sharp'); // Importamos sharp
+const fs = require('fs'); // Para manejar el sistema de archivos
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de la base de datos
-const db = mysql.createConnection({
+// Configuración del pool de conexiones
+const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-// Conectar a la base de datos
-db.connect((err) => {
+// Manejar errores en el pool
+pool.on('error', (err) => {
+    console.error('Error en el pool de conexiones:', err);
+});
+
+// Verificar la conexión inicial a la base de datos
+pool.getConnection((err, connection) => {
     if (err) {
-        console.error('Error al conectar a la base de datos:', err.message);
+        console.error('Error al conectar a la base de datos:', err);
         return;
     }
-    console.log('Conectado a la base de datos');
+    console.log('Conexión a la base de datos establecida correctamente.');
+    connection.release(); // Liberar la conexión después de verificar
 });
 
 // Configuración de EJS
@@ -47,10 +57,31 @@ async function optimizarImagen(buffer, filename) {
     return `/uploads/${filename}`;
 }
 
-// Ruta: Página principal
+// Asegurarse que el directorio existe
+const uploadsDir = path.join(__dirname, 'public/uploads/');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Ruta: Página principal con filtro
 app.get('/', (req, res) => {
-    db.query('SELECT * FROM images', (err, results) => {
-        if (err) throw err;
+    const { brand } = req.query; // Obtener el valor del query string
+
+    let query = 'SELECT * FROM images';
+    const params = [];
+
+    // Si hay una marca especificada, actualizamos la consulta
+    if (brand) {
+        query += ' WHERE brand = ?';
+        params.push(brand);
+    }
+
+    // Usar el pool para ejecutar la consulta
+    pool.query(query, params, (err, results) => {
+        if (err) {
+            console.error('Error al obtener imágenes:', err);
+            return res.status(500).send('Error al obtener imágenes.');
+        }
         res.render('index', { images: results });
     });
 });
@@ -66,8 +97,11 @@ app.post('/add', upload.single('image'), async (req, res) => {
     
     try {
         const image_path = await optimizarImagen(req.file.buffer, `${Date.now()}_${req.file.originalname}`);
-        db.query('INSERT INTO images (title, brand, image_path) VALUES (?, ?, ?)', [title, brand, image_path], (err) => {
-            if (err) throw err;
+        pool.query('INSERT INTO images (title, brand, image_path) VALUES (?, ?, ?)', [title, brand, image_path], (err) => {
+            if (err) {
+                console.error('Error al insertar imagen:', err);
+                return res.status(500).send('Error al guardar la imagen.');
+            }
             res.redirect('/');
         });
     } catch (error) {
@@ -79,8 +113,11 @@ app.post('/add', upload.single('image'), async (req, res) => {
 // Ruta: Formulario para editar
 app.get('/edit/:id', (req, res) => {
     const { id } = req.params;
-    db.query('SELECT * FROM images WHERE id = ?', [id], (err, results) => {
-        if (err) throw err;
+    pool.query('SELECT * FROM images WHERE id = ?', [id], (err, results) => {
+        if (err) {
+            console.error('Error al obtener la imagen:', err);
+            return res.status(500).send('Error al obtener la imagen.');
+        }
         res.render('edit', { image: results[0] });
     });
 });
@@ -104,8 +141,11 @@ app.post('/edit/:id', upload.single('image'), async (req, res) => {
         updateQuery += ' WHERE id = ?';
         params.push(id);
 
-        db.query(updateQuery, params, (err) => {
-            if (err) throw err;
+        pool.query(updateQuery, params, (err) => {
+            if (err) {
+                console.error('Error al actualizar la imagen:', err);
+                return res.status(500).send('Error al actualizar la imagen.');
+            }
             res.redirect('/');
         });
     } catch (error) {
@@ -117,8 +157,11 @@ app.post('/edit/:id', upload.single('image'), async (req, res) => {
 // Ruta: Eliminar imagen
 app.post('/delete/:id', (req, res) => {
     const { id } = req.params;
-    db.query('DELETE FROM images WHERE id = ?', [id], (err) => {
-        if (err) throw err;
+    pool.query('DELETE FROM images WHERE id = ?', [id], (err) => {
+        if (err) {
+            console.error('Error al eliminar la imagen:', err);
+            return res.status(500).send('Error al eliminar la imagen.');
+        }
         res.redirect('/');
     });
 });
